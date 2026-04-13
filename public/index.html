@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ponto Eletrônico</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <nav class="bg-blue-600 text-white shadow">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+      <div class="flex items-center gap-3">
+        <i class="fas fa-clock text-3xl"></i>
+        <h1 class="text-2xl font-bold">Ponto Eletrônico</h1>
+      </div>
+      <div id="userInfo" class="flex items-center gap-4"></div>
+    </div>
+  </nav>
+
+  <div class="max-w-md mx-auto mt-16 px-6">
+
+    <!-- LOGIN -->
+    <div id="loginScreen" class="bg-white rounded-3xl shadow-xl p-8">
+      <h2 class="text-3xl font-bold text-center mb-8">Entrar</h2>
+      <input id="email" type="email" placeholder="Email" class="w-full px-5 py-4 border rounded-2xl mb-4">
+      <input id="senha" type="password" placeholder="Senha" class="w-full px-5 py-4 border rounded-2xl mb-6">
+      <button onclick="login()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-semibold">Entrar</button>
+      <p class="text-center mt-4 text-gray-600">
+        Não tem conta? <span onclick="showRegister()" class="text-blue-600 cursor-pointer hover:underline">Cadastre-se</span>
+      </p>
+    </div>
+
+    <!-- CADASTRO -->
+    <div id="registerScreen" class="bg-white rounded-3xl shadow-xl p-8 hidden">
+      <h2 class="text-3xl font-bold text-center mb-8">Criar Conta</h2>
+      
+      <div class="space-y-5">
+        <input id="nome" type="text" placeholder="Nome completo" class="w-full px-5 py-4 border rounded-2xl">
+        <input id="regEmail" type="email" placeholder="Email" class="w-full px-5 py-4 border rounded-2xl">
+        <input id="regSenha" type="password" placeholder="Senha" class="w-full px-5 py-4 border rounded-2xl">
+
+        <button onclick="register()" 
+                class="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl font-semibold">
+          Cadastrar
+        </button>
+
+        <p class="text-center text-gray-600">
+          Já tem conta? <span onclick="showLogin()" class="text-blue-600 cursor-pointer hover:underline">Voltar ao Login</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dashboard" class="hidden">
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        <button onclick="baterPonto('entrada')" class="bg-emerald-600 hover:bg-emerald-700 text-white p-10 rounded-3xl shadow-xl flex flex-col items-center gap-4 transition">
+          <i class="fas fa-sign-in-alt text-6xl"></i>
+          <p class="font-bold text-2xl">Entrada</p>
+        </button>
+        <button onclick="baterPonto('saida')" class="bg-orange-600 hover:bg-orange-700 text-white p-10 rounded-3xl shadow-xl flex flex-col items-center gap-4 transition">
+          <i class="fas fa-sign-out-alt text-6xl"></i>
+          <p class="font-bold text-2xl">Saída</p>
+        </button>
+        <button onclick="baterPonto('almoco')" class="bg-amber-600 hover:bg-amber-700 text-white p-10 rounded-3xl shadow-xl flex flex-col items-center gap-4 transition">
+          <i class="fas fa-utensils text-6xl"></i>
+          <p class="font-bold text-2xl">Almoço</p>
+        </button>
+      </div>
+
+      <div class="bg-white rounded-3xl shadow-xl p-8 mb-10">
+        <h2 class="text-2xl font-bold mb-6">Meu Histórico</h2>
+        <div id="historico" class="space-y-4"></div>
+      </div>
+
+      <div id="adminArea" class="hidden bg-white rounded-3xl shadow-xl p-8">
+        <h2 class="text-2xl font-bold mb-6">Painel Administrativo</h2>
+        <div id="adminTable" class="overflow-x-auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden fixed bottom-6 right-6 px-6 py-4 rounded-2xl shadow-2xl text-white"></div>
+
+  <script>
+    let token = null;
+    let userId = null;
+    let userRole = null;
+    let currentUserName = "";
+
+    function showToast(msg, type = "success") {
+      const toast = document.getElementById("toast");
+      toast.className = `fixed bottom-6 right-6 px-6 py-4 rounded-2xl shadow-2xl ${type === "error" ? "bg-red-600" : "bg-emerald-600"}`;
+      toast.textContent = msg;
+      toast.classList.remove("hidden");
+      setTimeout(() => toast.classList.add("hidden"), 4000);
+    }
+
+    function showLogin() {
+      document.getElementById("loginScreen").classList.remove("hidden");
+      document.getElementById("registerScreen").classList.add("hidden");
+    }
+
+    function showRegister() {
+      document.getElementById("loginScreen").classList.add("hidden");
+      document.getElementById("registerScreen").classList.remove("hidden");
+    }
+
+    // CADASTRO - Senha "110908" cria admin automaticamente
+    async function register() {
+      const nome = document.getElementById("nome").value.trim();
+      const email = document.getElementById("regEmail").value.trim();
+      const senha = document.getElementById("regSenha").value.trim();
+
+      if (!nome || !email || !senha) {
+        return showToast("Preencha todos os campos", "error");
+      }
+
+      try {
+        const res = await fetch("/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nome, email, senha })
+        });
+
+        const data = await res.json();
+
+        if (data.ok) {
+          showToast(data.mensagem || "Cadastro realizado com sucesso!", "success");
+          showLogin();
+        } else {
+          showToast(data.erro || "Erro ao cadastrar", "error");
+        }
+      } catch (e) {
+        showToast("Erro de conexão", "error");
+      }
+    }
+
+    async function login() {
+      const email = document.getElementById("email").value.trim();
+      const senha = document.getElementById("senha").value.trim();
+
+      if (!email || !senha) return showToast("Preencha email e senha", "error");
+
+      try {
+        const res = await fetch("/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, senha })
+        });
+
+        const data = await res.json();
+
+        if (data.ok && data.token) {
+          token = data.token;
+          userId = data.id;
+          userRole = data.role;
+          currentUserName = data.nome;
+
+          localStorage.setItem("token", token);
+          localStorage.setItem("userId", userId);
+          localStorage.setItem("role", userRole);
+          localStorage.setItem("nome", currentUserName);
+
+          document.getElementById("loginScreen").classList.add("hidden");
+          document.getElementById("dashboard").classList.remove("hidden");
+
+          document.getElementById("userInfo").innerHTML = `
+            ${currentUserName} (${userRole})
+            <button onclick="logout()" class="ml-4 bg-white/20 px-4 py-2 rounded-xl text-sm">Sair</button>
+          `;
+
+          if (userRole === "admin") {
+            document.getElementById("adminArea").classList.remove("hidden");
+            carregarAdmin();
+          }
+
+          carregarPontos();
+        } else {
+          showToast(data.erro || "Email ou senha incorretos", "error");
+        }
+      } catch (e) {
+        showToast("Erro ao fazer login", "error");
+      }
+    }
+
+    async function baterPonto(tipo) {
+      if (!token) return showToast("Faça login novamente", "error");
+
+      try {
+        const res = await fetch("/ponto", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ tipo })
+        });
+
+        const data = await res.json();
+
+        if (data.ok) {
+          showToast(`Ponto de ${tipo} registrado!`, "success");
+          carregarPontos();
+          if (userRole === "admin") carregarAdmin();
+        } else {
+          showToast(data.erro || "Erro ao bater ponto", "error");
+        }
+      } catch (e) {
+        showToast("Erro de conexão", "error");
+      }
+    }
+
+    async function carregarPontos() {
+      try {
+        const res = await fetch(`/pontos/${userId}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        const pontos = await res.json();
+
+        let html = "";
+        pontos.forEach(p => {
+          html += `
+            <div class="bg-gray-50 p-5 rounded-2xl">
+              <p class="font-bold capitalize">${p.tipo}</p>
+              <p class="text-gray-600">${p.data} • ${p.hora}</p>
+            </div>`;
+        });
+
+        document.getElementById("historico").innerHTML = html || "<p class='text-gray-500 py-8 text-center'>Nenhum ponto registrado ainda.</p>";
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function carregarAdmin() {
+      try {
+        const res = await fetch("/admin", {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        const registros = await res.json();
+
+        let html = `<table class="w-full"><thead class="bg-gray-100"><tr>
+          <th class="p-4 text-left">Nome</th>
+          <th class="p-4 text-left">Tipo</th>
+          <th class="p-4 text-left">Data</th>
+          <th class="p-4 text-left">Hora</th>
+          <th class="p-4 text-center">Ação</th>
+        </tr></thead><tbody>`;
+
+        registros.forEach(r => {
+          html += `
+            <tr class="border-t hover:bg-gray-50">
+              <td class="p-4">${r.nome}</td>
+              <td class="p-4 capitalize">${r.tipo}</td>
+              <td class="p-4">${r.data}</td>
+              <td class="p-4">${r.hora}</td>
+              <td class="p-4 text-center">
+                <button onclick="corrigirPonto(${r.id})" class="bg-yellow-500 hover:bg-yellow-600 text-white px-5 py-1 rounded-xl text-sm">Corrigir</button>
+              </td>
+            </tr>`;
+        });
+
+        html += `</tbody></table>`;
+        document.getElementById("adminTable").innerHTML = html;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function corrigirPonto(id) {
+      const novaHora = prompt("Digite a nova hora (HH:MM):");
+      if (!novaHora) return;
+
+      fetch("/corrigir", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ id, hora: novaHora })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.ok) {
+          showToast("Hora corrigida com sucesso!", "success");
+          carregarAdmin();
+          carregarPontos();
+        } else {
+          showToast("Erro ao corrigir", "error");
+        }
+      });
+    }
+
+    function logout() {
+      localStorage.clear();
+      location.reload();
+    }
+
+    window.onload = () => {
+      const savedToken = localStorage.getItem("token");
+      if (savedToken) {
+        token = savedToken;
+        userId = localStorage.getItem("userId");
+        userRole = localStorage.getItem("role");
+        currentUserName = localStorage.getItem("nome");
+
+        document.getElementById("loginScreen").classList.add("hidden");
+        document.getElementById("dashboard").classList.remove("hidden");
+
+        document.getElementById("userInfo").innerHTML = `
+          ${currentUserName} (${userRole})
+          <button onclick="logout()" class="ml-4 bg-white/20 px-4 py-2 rounded-xl text-sm">Sair</button>
+        `;
+
+        if (userRole === "admin") {
+          document.getElementById("adminArea").classList.remove("hidden");
+          carregarAdmin();
+        }
+        carregarPontos();
+      }
+    };
+  </script>
+</body>
+</html>
